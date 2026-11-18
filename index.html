@@ -303,25 +303,49 @@
 
     async function loadTransparencyLogs(campaignId) {
         const logBody = document.getElementById('txLogBody');
-        logBody.innerHTML = "";
-        const idNum = parseInt(campaignId);
+        logBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">กำลังโหลดประวัติธุรกรรม...</td></tr>`;
+        
+        try {
+            const idNum = parseInt(campaignId);
+            const currentBlock = await provider.getBlockNumber();
+            // ค้นหาย้อนหลัง 5,000 บล็อกล่าสุดเพื่อป้องกัน RPC Error บน Sepolia
+            const fromBlock = Math.max(0, currentBlock - 5000);
 
-        const inEvents = await contract.queryFilter(contract.filters.FundContributed(idNum));
-        const outEvents = await contract.queryFilter(contract.filters.MilestonePaid(idNum));
-        const refEvents = await contract.queryFilter(contract.filters.RefundClaimed(idNum));
+            const inEvents = await contract.queryFilter(contract.filters.FundContributed(idNum), fromBlock, currentBlock);
+            const outEvents = await contract.queryFilter(contract.filters.MilestonePaid(idNum), fromBlock, currentBlock);
+            const refEvents = await contract.queryFilter(contract.filters.RefundClaimed(idNum), fromBlock, currentBlock);
 
-        inEvents.forEach(e => {
-            logBody.innerHTML += `<tr><td style="color:#10b981; font-weight:bold;">เงินเข้า (สนับสนุน)</td><td>${e.args.contributor}</td><td>+${ethers.utils.formatEther(e.args.amount)} ETH</td></tr>`;
-        });
-        outEvents.forEach(e => {
-            logBody.innerHTML += `<tr><td style="color:#2563eb; font-weight:bold;">เงินออก (จ่าย Milestone #${e.args.milestoneIndex})</td><td>${e.args.creator}</td><td>-${ethers.utils.formatEther(e.args.amount)} ETH</td></tr>`;
-        });
-        refEvents.forEach(e => {
-            logBody.innerHTML += `<tr><td style="color:#ef4444; font-weight:bold;">คืนเงิน (Refund)</td><td>${e.args.contributor}</td><td>-${ethers.utils.formatEther(e.args.amount)} ETH</td></tr>`;
-        });
+            let html = "";
+            inEvents.forEach(e => {
+                html += `<tr>
+                    <td style="color:#10b981; font-weight:bold;">เงินเข้า (สนับสนุน)</td>
+                    <td>${e.args.contributor} <br><small><a href="https://sepolia.etherscan.io/tx/${e.transactionHash}" target="_blank">ดูบน Etherscan</a></small></td>
+                    <td>+${ethers.utils.formatEther(e.args.amount)} ETH</td>
+                </tr>`;
+            });
+            outEvents.forEach(e => {
+                html += `<tr>
+                    <td style="color:#2563eb; font-weight:bold;">เงินออก (จ่าย Milestone #${e.args.milestoneIndex})</td>
+                    <td>${e.args.creator} <br><small><a href="https://sepolia.etherscan.io/tx/${e.transactionHash}" target="_blank">ดูบน Etherscan</a></small></td>
+                    <td>-${ethers.utils.formatEther(e.args.amount)} ETH</td>
+                </tr>`;
+            });
+            refEvents.forEach(e => {
+                html += `<tr>
+                    <td style="color:#ef4444; font-weight:bold;">คืนเงิน (Refund)</td>
+                    <td>${e.args.contributor} <br><small><a href="https://sepolia.etherscan.io/tx/${e.transactionHash}" target="_blank">ดูบน Etherscan</a></small></td>
+                    <td>-${ethers.utils.formatEther(e.args.amount)} ETH</td>
+                </tr>`;
+            });
 
-        if (logBody.innerHTML === "") {
-            logBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">ยังไม่มีประวัติเงินเข้า-ออกในโครงการนี้</td></tr>`;
+            if (html === "") {
+                logBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">ยังไม่มีประวัติเงินเข้า-ออกในโครงการนี้</td></tr>`;
+            } else {
+                logBody.innerHTML = html;
+            }
+        } catch (err) {
+            console.error("Log Error:", err);
+            logBody.innerHTML = `<tr><td colspan="3" style="text-align:center; color:red;">ไม่สามารถโหลด Log ได้: ${err.message}</td></tr>`;
         }
     }
 </script>
